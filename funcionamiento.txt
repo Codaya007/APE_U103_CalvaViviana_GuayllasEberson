@@ -1,0 +1,11 @@
+Encender el Backend (Terminal 1):
+
+
+cd backend
+uvicorn main:app --reload --port 8000
+
+
+Encender el Frontend (Terminal 2):
+
+cd frontend
+streamlit run app.py
