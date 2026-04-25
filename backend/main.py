@@ -1,14 +1,15 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Dict
+from afd import AutomataTransaccionBancaria, AutomataSmartLock, AutomataLogistica
 
-app = FastAPI(title="API de Autómatas AFND")
+app = FastAPI(title="API de Autómatas")
 
 class EvalRequest(BaseModel):
-    automata_type: str  # 'ecommerce', 'iot', 'genetica'
+    automata_type: str  # 'ecommerce', 'iot', 'genetica' para AFND, y 'transaccion', 'smartlock', 'logistica' para AFD
     sequence: List[str]
 
-# Configuración de los 3 autómatas según tus diagramas
+# Configuración de los 3 autómatas según diagramas
 CONFIG = {
     "ecommerce": {
         "trans": {
@@ -67,5 +68,55 @@ async def evaluate(req: EvalRequest):
 
     return {
         "accepted": cfg["final"] in current_states,
+        "history": history
+    }
+
+@app.post("/evaluate_dfa")
+async def evaluate_dfa(req: EvalRequest):
+    history = []
+    accepted = False
+
+    if req.automata_type == "transaccion":
+        automata = AutomataTransaccionBancaria()
+        history.append({"step": 0, "input": "Inicio", "states": [automata.estado_inicial]})
+        res = automata.evaluar(req.sequence)
+        accepted = (res == "Cadena aceptada")
+        for i, h in enumerate(automata.historial):
+            history.append({
+                "step": i + 1,
+                "input": h["evento"],
+                "states": [h["a"]]
+            })
+
+    elif req.automata_type == "smartlock":
+        automata = AutomataSmartLock()
+        history.append({"step": 0, "input": "Inicio", "states": [automata.estado_actual]})
+        for i, event in enumerate(req.sequence):
+            automata.procesar_intento(event)
+            history.append({
+                "step": i + 1,
+                "input": event,
+                "states": [automata.estado_actual]
+            })
+            if automata.estado_actual == "q_block":
+                break
+        accepted = (automata.estado_actual == "q_open")
+
+    elif req.automata_type == "logistica":
+        automata = AutomataLogistica()
+        history.append({"step": 0, "input": "Inicio", "states": [automata.estados[automata.estado_inicial]]})
+        res = automata.procesar_flujo(req.sequence)
+        accepted = ("Válido" in res)
+        for i, h in enumerate(automata.historial):
+            history.append({
+                "step": i + 1,
+                "input": h["evento"],
+                "states": [h["destino"]]
+            })
+    else:
+        return {"error": "Tipo no válido"}
+
+    return {
+        "accepted": accepted,
         "history": history
     }

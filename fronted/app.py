@@ -6,7 +6,7 @@ import os
 st.set_page_config(page_title="Analizador de Autómatas", layout="wide")
 
 # Configuración de Contenidos por Autómata
-AUT_META = {
+AFND_META = {
     "E-commerce": {
         "id": "ecommerce",
         "sigma": "{ H, S, C }",
@@ -30,10 +30,43 @@ AUT_META = {
     }
 }
 
+AFD_META = {
+    "Transacción Bancaria": {
+        "id": "transaccion",
+        "sigma": "{ A, C, L }",
+        "desc": "Transacción Bancaria (A: Autenticar, C: Capturar, L: Liquidar)",
+        "img": "transaccionBancaria.png",
+        "trans": ["δ(q0,A)=q_aut", "δ(q_aut,C)=q_cap", "δ(q_cap,L)=q_com"]
+    },
+    "Smart Lock": {
+        "id": "smartlock",
+        "sigma": "{ ok, bad }",
+        "desc": "Cerradura Inteligente (ok: clave correcta, bad: clave incorrecta)",
+        "img": "smartlock.png",
+        "trans": ["δ(q0,ok)=q_open", "δ(q0,bad)=q1", "δ(q1,ok)=q_open", "δ(q1,bad)=q2", "δ(q2,ok)=q_open", "δ(q2,bad)=q_block", "δ(q_block,bad)=q_block", "δ(q_block,ok)=q_block"]
+    },
+    "Logística": {
+        "id": "logistica",
+        "sigma": "{ emp, env, ent, dev, can }",
+        "desc": "Flujo de Logística (emp: empaquetar, env: enviar, ent: entregar, dev: devolver, can: cancelar)",
+        "img": "logistica.png",
+        "trans": ["δ(q_cre,emp)=q_emp", "δ(q_cre,can)=q_can", "δ(q_emp,env)=q_env", "δ(q_emp,can)=q_can", "δ(q_env,ent)=q_ent", "δ(q_ent,dev)=q_dev"]
+    }
+}
+
 # --- Sidebar ---
 st.sidebar.title("Configuración")
-selected_name = st.sidebar.selectbox("Selecciona el Ejercicio:", list(AUT_META.keys()))
-meta = AUT_META[selected_name]
+categoria = st.sidebar.radio("Categoría:", ["Autómatas Finitos Deterministas (AFD)", "Autómatas Finitos No Deterministas (AFND)"])
+
+if categoria == "Autómatas Finitos Deterministas (AFD)":
+    meta_dict = AFD_META
+    endpoint = "evaluate_dfa"
+else:
+    meta_dict = AFND_META
+    endpoint = "evaluate"
+
+selected_name = st.sidebar.selectbox("Selecciona el Ejercicio:", list(meta_dict.keys()))
+meta = meta_dict[selected_name]
 
 # --- UI Principal ---
 st.title(f"🔍 {selected_name}")
@@ -53,9 +86,9 @@ with col2:
     # Busca la imagen en la carpeta images/
     img_path = os.path.join(os.path.dirname(__file__), "images", meta["img"])
     if os.path.exists(img_path):
-        st.image(img_path, caption=f"Modelo AFND para {selected_name}")
+        st.image(img_path, caption=f"Modelo para {selected_name}")
     else:
-        st.error(f"Falta imagen: '{meta['img']}' en carpeta 'images/'")
+        st.warning(f"No hay diagrama disponible para este modelo (falta imagen: '{meta['img']}')")
 
 st.divider()
 
@@ -64,9 +97,11 @@ st.subheader(" Ejecución y Pruebas")
 raw_input = st.text_input("Ingresa la secuencia (ej: H, S, S, C):", placeholder="Usa comas para separar")
 
 if st.button("Evaluar Cadena", type="primary"):
-    seq = [s.strip().upper() for s in raw_input.split(",") if s.strip()]
+    seq = [s.strip() for s in raw_input.split(",") if s.strip()]
+    if categoria == "Autómatas Finitos No Deterministas (AFND)":
+        seq = [s.upper() for s in seq] # Los AFND usaban mayúsculas en el código original
     try:
-        res = requests.post("http://localhost:8000/evaluate", 
+        res = requests.post(f"http://localhost:8000/{endpoint}", 
                             json={"automata_type": meta["id"], "sequence": seq})
         
         if res.status_code == 200:
